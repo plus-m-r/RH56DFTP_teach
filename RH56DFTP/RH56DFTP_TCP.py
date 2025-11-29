@@ -287,3 +287,6 @@ class RH56DFTPClient(RH56DFTPBase):
         析构函数，确保连接被关闭
         """
         self.close()
+
+# 添加别名以保持向后兼容
+RH56DFTP_TCP = RH56DFTPClient  # pylint: disable=invalid-name
