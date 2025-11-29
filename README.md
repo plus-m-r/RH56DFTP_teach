@@ -1,6 +1,6 @@
-# RH56DFTP Python Library
+# plusml-rh56dftp Python Library
 
-A Python library for communicating with RH56DFTP devices (tactile hand) via Modbus TCP.
+A Python library for communicating with RH56DFTP devices (tactile hand) via Modbus TCP, developed by plusml.
 
 ## Features
 
@@ -13,9 +13,17 @@ A Python library for communicating with RH56DFTP devices (tactile hand) via Modb
 
 ## Installation
 
+### From PyPI (Recommended)
+
+You can install the library directly from PyPI using pip:
+
+```bash
+pip install plusml-rh56dftp
+```
+
 ### From Source
 
-You can install the library from the GitHub repository:
+You can also install the library from the GitHub repository:
 
 ```bash
 git clone https://github.com/plus-m-r/RH56DFTP_teach.git
@@ -28,7 +36,7 @@ pip install -e .
 After building the package, you can install it from the generated wheel file:
 
 ```bash
-pip install dist/rh56dftp-0.1.0-py3-none-any.whl
+pip install dist/plusml-rh56dftp-0.1.0-py3-none-any.whl
 ```
 
 ## Requirements
@@ -41,6 +49,7 @@ pip install dist/rh56dftp-0.1.0-py3-none-any.whl
 ### Basic Usage
 
 ```python
+# First install the library: pip install plusml-rh56dftp
 from RH56DFTP.RH56DFTP_TCP import RH56DFTP_TCP
 
 # Initialize connection to the tactile hand
@@ -124,15 +133,20 @@ YYYY-MM-DD HH:MM:SS - RH56DFTP - LEVEL - MESSAGE
 RH56DFTP_teach/
 ├── RH56DFTP/              # Main library code
 │   ├── RH56DFTP_base.py   # Abstract base class
-│   └── RH56DFTP_TCP.py    # TCP implementation
+│   ├── RH56DFTP_base.pyi  # Type hints for base class
+│   ├── RH56DFTP_TCP.py    # TCP implementation
+│   ├── RH56DFTP_TCP.pyi   # Type hints for TCP implementation
+│   └── __init__.py        # Package initialization
 ├── Register/              # Register configuration
 │   ├── config/            # Configuration files
 │   │   └── configFTP/     # FTP register configs
 │   ├── RegisterKey/       # Register name constants
 │   └── RegisterSet/       # Register classes
 ├── connect.py             # Example connection script
+├── LICENSE                # MIT License file
 ├── README.md              # This file
-├── setup.py               # Package setup
+├── pyproject.toml         # Modern package configuration
+├── setup.py               # Package setup (legacy)
 └── requirements.txt       # Dependencies
 ```
 
@@ -140,23 +154,15 @@ RH56DFTP_teach/
 
 ### Building the Package
 
-To build the package for distribution:
+To build the package for distribution (recommended method):
 
 ```bash
-python setup.py sdist bdist_wheel
+python -m build
 ```
 
 This will generate:
-- `dist/rh56dftp-0.1.0.tar.gz` (source distribution)
-- `dist/rh56dftp-0.1.0-py3-none-any.whl` (wheel distribution)
-
-### Testing
-
-Run the example script to test the connection:
-
-```bash
-python connect.py
-```
+- `dist/plusml-rh56dftp-0.1.0.tar.gz` (source distribution)
+- `dist/plusml-rh56dftp-0.1.0-py3-none-any.whl` (wheel distribution)
 
 ## License
 

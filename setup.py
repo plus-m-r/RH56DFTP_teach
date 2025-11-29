@@ -4,7 +4,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
-    name="RH56DFTP",
+    name="plusml-rh56dftp",
     version="0.1.0",
     author="plus-m-r",
     author_email="",
