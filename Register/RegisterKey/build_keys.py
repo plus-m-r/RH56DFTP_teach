@@ -84,8 +84,11 @@ def process_directory(config_dir: str, output_dir: str) -> None:
 
 if __name__ == "__main__":
     # 默认配置目录和输出目录
-    default_config_dir = "/home/plus/learn/RH56DFTP_teach/Register/config/configFTP"
-    default_output_dir = "/home/plus/learn/RH56DFTP_teach/Register/RegisterKey"
+    import os
+    # 获取项目根目录
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    default_config_dir = os.path.join(BASE_DIR, "Register", "config", "configFTP")
+    default_output_dir = os.path.dirname(os.path.abspath(__file__))
     
     # 处理命令行参数
     config_dir = sys.argv[1] if len(sys.argv) > 1 else default_config_dir
