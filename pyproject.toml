@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "RH56DFTP"
+version = "0.1.0"
+authors = [
+  { name = "plus-m-r" }
+]
+description = "A Python library for communicating with RH56DFTP devices (tactile hand)"
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "pymodbus==3.11.3",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/plus-m-r/RH56DFTP_teach"
+"Repository" = "https://github.com/plus-m-r/RH56DFTP_teach"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["RH56DFTP", "Register"]
+exclude = ["tests", "*.tests", "*.tests.*"]
