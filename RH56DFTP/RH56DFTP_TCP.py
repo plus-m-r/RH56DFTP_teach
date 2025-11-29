@@ -30,14 +30,14 @@ class RH56DFTPClient(RH56DFTPBase):
     RH56DFTP的TCP实现类，用于通过Modbus TCP协议与设备通信
     """
 
-    def __init__(self, host: str, port: int, config_folder_path: str = "Register/config/configFTP"):
+    def __init__(self, host: str, port: int, config_folder_path: str = None):
         """
         初始化TCP连接
 
         Args:
             host: 设备IP地址
             port: 设备端口号
-            config_folder_path: 寄存器配置文件夹路径，默认为 "Register/config/configFTP"
+            config_folder_path: 寄存器配置文件夹路径，默认为包内的配置路径
 
         Raises:
             ConnectionError: 当连接失败时抛出
@@ -49,24 +49,95 @@ class RH56DFTPClient(RH56DFTPBase):
             raise ConnectionError(f"连接失败：无法连接到 {host}:{port}")
 
         # 创建寄存器对象字典
-        logger.debug("正在创建寄存器对象字典，配置路径: %s", config_folder_path)
+        logger.debug("正在创建寄存器对象字典，使用内置配置")
         self.registers: Dict[RegisterName, Register_FTP] = register_factory.create_registers(
-            config_folder_path=config_folder_path,
+            config_folder_path=None,
             strategy_name='ftp'
         )
         logger.info("成功连接到 %s:%s", host, port)
         logger.info("已加载 %d 个寄存器", len(self.registers))
 
+    def _process_raw_value(self, register, raw_value):
+        """处理原始寄存器值，根据数据类型转换"""
+        if register.data_type == "uint8":
+            # uint8类型，只取低8位
+            return raw_value & 0xFF
+        if register.data_type == "short":
+            # short类型，处理16位有符号值
+            return raw_value - 65536 if raw_value > 32767 else raw_value
+        return raw_value
+
+    def _read_single_register(self, register, register_name):
+        """读取单个寄存器"""
+        logger.debug("读取单个地址寄存器 %s，地址: %d", register_name, register.address)
+        response = self.client.read_holding_registers(
+            address=register.address,
+            count=1  # 单个寄存器（16位）
+        )
+        if response.isError():
+            logger.error("读取寄存器 %s 失败: %s", register_name, response)
+            raise ValueError(f"读取寄存器 {register_name} 失败: {response}")
+        raw_value = response.registers[0]
+        value = self._process_raw_value(register, raw_value)
+        logger.info("成功读取寄存器 %s: 值=%d, 地址=%d", register_name, value, register.address)
+        return value
+
+    def _read_register_batch(self, start_address, count):
+        """读取寄存器批次"""
+        max_count_per_read = 125
+        all_registers = []
+        current_addr = start_address
+        remaining = count
+
+        while remaining > 0:
+            batch_count = min(remaining, max_count_per_read)
+            logger.debug("读取批次: 起始地址=%d, 数量=%d, 剩余=%d",
+                        current_addr, batch_count, remaining - batch_count)
+
+            response = self.client.read_holding_registers(
+                address=current_addr,
+                count=batch_count
+            )
+            if response.isError():
+                raise ValueError(f"读取寄存器失败: {response}")
+
+            all_registers.extend(response.registers)
+            current_addr += batch_count
+            remaining -= batch_count
+
+        return all_registers
+
+    def _read_range_register(self, register, register_name):
+        """读取地址范围寄存器"""
+        start_address, end_address = register.address
+        count = end_address - start_address + 1
+        logger.debug("读取地址范围寄存器 %s，地址范围: %d-%d, 数量: %d",
+                    register_name, start_address, end_address, count)
+
+        all_registers = self._read_register_batch(start_address, count)
+
+        # 根据数据类型进行解析
+        if register.data_type == "short" and count == 2:
+            raw_value = all_registers[0]
+            value = self._process_raw_value(register, raw_value)
+            logger.info("成功读取寄存器 %s: 值=%d, 地址范围=%d-%d",
+                       register_name, value, start_address, end_address)
+        else:
+            value = all_registers
+            logger.info("成功读取寄存器 %s: 值=%s, 地址范围=%d-%d",
+                       register_name, value, start_address, end_address)
+        return value
+
     def get(self, register_name: RegisterName) -> Any:
         """
         获取指定寄存器的值
-        
+
         Args:
             register_name: 寄存器名称
-            
+
         Returns:
             寄存器的当前值
-        
+
         Raises:
             ValueError: 当寄存器不存在或读取失败时抛出
         """
@@ -83,56 +154,20 @@ class RH56DFTPClient(RH56DFTPBase):
             raise ValueError(f"寄存器 {register_name} 不存在")
 
         register = self.registers[register_name]
-        value = None
 
         try:
             # 根据地址类型处理
             if isinstance(register.address, int):
-                # 单个地址
-                logger.debug("读取单个地址寄存器 %s，地址: %d", register_name, register.address)
-                response = self.client.read_holding_registers(
-                    address=register.address,
-                    count=1  # 假设大多数寄存器是1个寄存器
-                )
-                if response.isError():
-                    logger.error("读取寄存器 %s 失败: %s", register_name, response)
-                    raise ValueError(f"读取寄存器 {register_name} 失败: {response}")
-                value = response.registers[0]
-                logger.info("成功读取寄存器 %s: 值=%d, 地址=%d", register_name, value, register.address)
-            elif isinstance(register.address, tuple) and len(register.address) == 2:
-                # 地址范围
-                start_address, end_address = register.address
-                count = end_address - start_address + 1
-                logger.debug("读取地址范围寄存器 %s，地址范围: %d-%d, 数量: %d",
-                            register_name, start_address, end_address, count)
-                response = self.client.read_holding_registers(
-                    address=start_address,
-                    count=count
-                )
-                if response.isError():
-                    logger.error("读取寄存器 %s 失败: %s", register_name, response)
-                    raise ValueError(f"读取寄存器 {register_name} 失败: {response}")
-
-                # 根据数据类型进行解析
-                if register.data_type == "short" and count == 2:
-                    # 2字节数据，可能需要处理高低字节
-                    value = response.registers[0]  # 简化处理，实际可能需要合并
-                    logger.info("成功读取寄存器 %s: 值=%d, 地址范围=%d-%d",
-                               register_name, value, start_address, end_address)
-                else:
-                    value = response.registers
-                    logger.info("成功读取寄存器 %s: 值=%s, 地址范围=%d-%d",
-                               register_name, value, start_address, end_address)
-            else:
-                # 无效地址格式
-                logger.error("读取寄存器 %s 失败: 无效的地址格式 %s", register_name, register.address)
-                raise ValueError(f"无效的地址格式: {register.address}")
+                return self._read_single_register(register, register_name)
+            if isinstance(register.address, tuple) and len(register.address) == 2:
+                return self._read_range_register(register, register_name)
+            # 无效地址格式
+            logger.error("读取寄存器 %s 失败: 无效的地址格式 %s", register_name, register.address)
+            raise ValueError(f"无效的地址格式: {register.address}")
 
         except Exception as e:
             logger.error("读取寄存器 %s 时出错: %s", register_name, str(e))
             raise ValueError(f"读取寄存器 {register_name} 时出错: {str(e)}") from e
-
-        return value
 
     def set(self, register_name: RegisterName, value: Any) -> bool:
         """
@@ -147,77 +182,95 @@ class RH56DFTPClient(RH56DFTPBase):
         """
         logger.info("开始设置寄存器: %s, 值: %s", register_name, value)
 
+        # 1. 检查连接状态
         if not self._check_connect():
             logger.error("设置寄存器 %s 失败: 连接已断开", register_name)
             return False
 
+        # 2. 检查寄存器是否存在
         if register_name not in self.registers:
             logger.error("设置寄存器 %s 失败: 寄存器不存在", register_name)
             return False
 
         register = self.registers[register_name]
 
-        # 检查访问权限
+        # 3. 检查访问权限
         if register.access_type == "read-only":
             logger.error("设置寄存器 %s 失败: 寄存器是只读的", register_name)
             return False
 
-        try:
-            # 检查值范围
-            if isinstance(register.value_range, tuple) and len(register.value_range) == 2:
-                min_val, max_val = register.value_range
-                if not min_val <= value <= max_val:
-                    logger.error("设置寄存器 %s 失败: 值 %s 超出范围 [%s, %s]",
-                                register_name, value, min_val, max_val)
-                    return False
-
-            # 根据地址类型处理
-            if isinstance(register.address, int):
-                logger.debug("写入单个地址寄存器 %s，地址: %d, 值: %s",
-                            register_name, register.address, value)
-                response = self.client.write_register(
-                    address=register.address,
-                    value=int(value)  # 假设需要转换为整数
-                )
-                if response.isError():
-                    logger.error("设置寄存器 %s 失败: %s", register_name, response)
-                    return False
-                logger.info("成功设置寄存器 %s: 值=%s, 地址=%d",
-                           register_name, value, register.address)
-                return True
-
-            # 处理多寄存器写入
-            if isinstance(register.address, tuple) and len(register.address) == 2:
-                start_address = register.address[0]
-                logger.debug("写入地址范围寄存器 %s，起始地址: %d, 值: %s",
-                            register_name, start_address, value)
-
-                if isinstance(value, int):
-                    response = self.client.write_register(
-                        address=start_address,
-                        value=value
-                    )
-                    if response.isError():
-                        logger.error("设置寄存器 %s 失败: %s", register_name, response)
-                        return False
-                    logger.info("成功设置寄存器 %s: 值=%s, 起始地址=%d",
-                               register_name, value, start_address)
-                    return True
-
-                logger.error("设置寄存器 %s 失败: 不支持的值类型 %s",
-                            register_name, type(value))
+        # 4. 检查值范围
+        if isinstance(register.value_range, tuple) and len(register.value_range) == 2:
+            min_val, max_val = register.value_range
+            if not min_val <= value <= max_val:
+                logger.error("设置寄存器 %s 失败: 值 %s 超出范围 [%s, %s]",
+                            register_name, value, min_val, max_val)
                 return False
 
-            logger.error("设置寄存器 %s 失败: 无效的地址格式 %s",
-                        register_name, register.address)
-            return False
+        # 5. 处理写入操作
+        return self._write_register(register, value)
 
+    def _write_register(self, register: Register_FTP, value: Any) -> bool:
+        """
+        执行寄存器写入操作
+        
+        Args:
+            register: 寄存器对象
+            value: 要写入的值
+            
+        Returns:
+            写入是否成功
+        """
+        success = False
+
+        try:
+            # 处理负数，转换为对应的无符号值
+            write_value = int(value)
+            # 如果是负数，转换为对应的无符号16位整数
+            if write_value < 0:
+                write_value = 65536 + write_value
+                logger.debug("将负数 %d 转换为无符号值 %d", int(value), write_value)
+
+            # 单个地址写入
+            if isinstance(register.address, int):
+                logger.debug("写入单个地址寄存器 %s，地址: %d, 值: %s, 转换后值: %d",
+                            register.name, register.address, value, write_value)
+                response = self.client.write_register(
+                    address=register.address,
+                    value=write_value
+                )
+                if not response.isError():
+                    logger.info("成功设置寄存器 %s: 值=%s, 地址=%d",
+                               register.name, value, register.address)
+                    success = True
+                else:
+                    logger.error("设置寄存器 %s 失败: %s", register.name, response)
+            # 地址范围写入
+            elif isinstance(register.address, tuple) and len(register.address) == 2:
+                start_address = register.address[0]
+                logger.debug("写入地址范围寄存器 %s，起始地址: %d, 值: %s, 转换后值: %d",
+                            register.name, start_address, value, write_value)
+
+                response = self.client.write_register(
+                    address=start_address,
+                    value=write_value
+                )
+                if not response.isError():
+                    logger.info("成功设置寄存器 %s: 值=%s, 起始地址=%d",
+                               register.name, value, start_address)
+                    success = True
+                else:
+                    logger.error("设置寄存器 %s 失败: %s", register.name, response)
+            # 无效地址格式
+            else:
+                logger.error("设置寄存器 %s 失败: 无效的地址格式 %s",
+                            register.name, register.address)
         except (ValueError, TypeError) as e:
-            logger.error("设置寄存器 %s 时出错: %s", register_name, str(e))
-            return False
+            logger.error("设置寄存器 %s 时出错: %s", register.name, str(e))
         except (ConnectionError, TimeoutError, OSError) as e:
-            logger.error("设置寄存器 %s 时发生连接错误: %s", register_name, str(e))
-            return False
+            logger.error("设置寄存器 %s 时发生连接错误: %s", register.name, str(e))
+
+        return success
 
     def _check_connect(self) -> bool:
         """

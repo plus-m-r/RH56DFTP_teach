@@ -14,6 +14,7 @@ AccessType = Literal["read-only","write-only","read-write"]
 
 @dataclass(frozen=True)
 class Register_FTP(RegisterBase):
+    name:str
     address:Union[int, Tuple[int, int]]
     value_range:Union[Tuple[Any,...],Tuple[Union[int,float],Union[int,float]]]
     range_type:RangeType
