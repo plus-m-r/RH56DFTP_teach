@@ -1,29 +1,29 @@
-# plusml-rh56dftp Python Library
+# plusml-rh56dftp Python 库
 
-A Python library for communicating with RH56DFTP devices (tactile hand) via Modbus TCP, developed by plusml.
+一个用于通过 Modbus TCP 与 RH56DFTP 设备（触觉手）通信的 Python 库，由 plusml 开发。
 
-## Features
+## 功能特点
 
-- Easy-to-use API for communicating with RH56DFTP tactile hand devices
-- Support for reading and writing registers
-- Built-in logging system for monitoring all operations
-- Comprehensive register definitions including force, current, temperature, and error data
-- Support for tactile data acquisition from all fingers and palm
-- Modular design for easy extension
+- 易于使用的 API，用于与 RH56DFTP 触觉手设备通信
+- 支持读取和写入寄存器
+- 内置日志系统，用于监控所有操作
+- 全面的寄存器定义，包括力、电流、温度和错误数据
+- 支持从所有手指和手掌获取触觉数据
+- 模块化设计，便于扩展
 
-## Installation
+## 安装
 
-### From PyPI (Recommended)
+### 从 PyPI 安装（推荐）
 
-You can install the library directly from PyPI using pip:
+您可以使用 pip 直接从 PyPI 安装该库：
 
 ```bash
 pip install plusml-rh56dftp
 ```
 
-### From Source
+### 从源代码安装
 
-You can also install the library from the GitHub repository:
+您也可以从 GitHub 仓库安装该库：
 
 ```bash
 git clone https://github.com/plus-m-r/RH56DFTP_teach.git
@@ -31,143 +31,194 @@ cd RH56DFTP_teach
 pip install -e .
 ```
 
-### From Local Package
+### 从本地包安装
 
-After building the package, you can install it from the generated wheel file:
+构建包后，您可以从生成的 wheel 文件安装：
 
 ```bash
 pip install dist/plusml-rh56dftp-0.1.0-py3-none-any.whl
 ```
 
-## Requirements
+## 要求
 
-- Python 3.7 or higher
+- Python 3.7 或更高版本
 - pymodbus 3.11.3
 
-## Usage
+## 使用方法
 
-### Basic Usage
+### 基本用法
+
+该库支持两种参数形式：函数对象和字符串形式。
 
 ```python
-# First install the library: pip install plusml-rh56dftp
+# 首先安装库：pip install plusml-rh56dftp
 from RH56DFTP.RH56DFTP_TCP import RH56DFTP_TCP
+from Register.RegisterKey.ftp_registers_keys import *
 
-# Initialize connection to the tactile hand
+# 初始化与触觉手的连接
 try:
-    # Replace with your device's IP address and port
+    # 替换为您设备的 IP 地址和端口
     client = RH56DFTP_TCP(host="192.168.123.210", port=6000)
-    print("✅ Connected successfully to tactile hand")
+    print("✅ 成功连接到触觉手")
     
-    # Read device ID
-    hand_id = client.get("HAND_ID")
-    print(f"🤖 Hand ID: {hand_id}")
+    # 1. 使用函数对象形式访问寄存器（推荐，支持 IDE 自动补全）
+    print("\n1. 使用函数对象形式：")
+    hand_id = client.get(HAND_ID)
+    print(f"🤖 设备 ID: {hand_id}")
     
-    # Write to a register (if supported)
-    success = client.set("HAND_ID", 2)
-    print(f"🔧 Set HAND_ID to 2: {success}")
+    # 使用函数对象写入寄存器
+    success = client.set(HAND_ID, 2)
+    print(f"🔧 设置 HAND_ID 为 2: {success}")
     
-    # Read force values from fingers
-    for finger in range(6):
-        force = client.get(f"FORCE_ACT({finger})")
-        print(f"✋ Finger {finger} force: {force} g")
+    # 读取手指力值 - 使用函数对象
+    print("\n💪 力值 (g):")
+    print(f"   - 小指: {client.get(FORCE_ACT_0)} g")
+    print(f"   - 无名指: {client.get(FORCE_ACT_1)} g")
+    print(f"   - 中指: {client.get(FORCE_ACT_2)} g")
+    print(f"   - 食指: {client.get(FORCE_ACT_3)} g")
+    print(f"   - 拇指弯曲: {client.get(FORCE_ACT_4)} g")
+    print(f"   - 拇指旋转: {client.get(FORCE_ACT_5)} g")
     
-    # Close connection properly
+    # 2. 使用字符串形式访问寄存器（兼容旧版本）
+    print("\n2. 使用字符串形式：")
+    hand_id_str = client.get("HAND_ID")
+    print(f"🤖 设备 ID (字符串形式): {hand_id_str}")
+    
+    # 使用字符串形式读取力值
+    force_0_str = client.get("FORCE_ACT(0)")
+    temp_1_str = client.get("TEMP(1)")
+    print(f"💪 小指力值 (字符串形式): {force_0_str} g")
+    print(f"🌡️ 执行器 1 温度 (字符串形式): {temp_1_str} °C")
+    
+    # 关闭连接
     client.close()
-    print("👋 Connection closed")
+    print("\n👋 连接已关闭")
 except Exception as e:
-    print(f"❌ Error: {e}")
+    print(f"❌ 错误: {e}")
 ```
 
-### Register Categories
+### 函数对象自动补全
 
-The library provides predefined register names organized by function:
+该库支持 IDE 自动补全寄存器函数。当您输入 `client.get(` 时，您的 IDE 会显示所有可用的寄存器函数及其文档。
 
-#### Device Configuration
-- `HAND_ID`: Device ID (1-254)
-- `REDU_RATIO`: Baud rate setting
-- `CLEAR_ERROR`: Clear errors command
-- `SAVE`: Save configuration to flash
-- `RESET_PARA`: Restore factory settings
+#### 主要优势
+- **IDE 自动补全**：无需记忆寄存器名称
+- **类型安全**：寄存器函数具有正确的类型
+- **文档提示**：每个函数都显示寄存器详细信息
+- **代码可读性**：比字符串字面量更直观
 
-#### Finger Force Data (Read-only)
-- `FORCE_ACT(0)`: Pinky finger force
-- `FORCE_ACT(1)`: Ring finger force  
-- `FORCE_ACT(2)`: Middle finger force
-- `FORCE_ACT(3)`: Index finger force
-- `FORCE_ACT(4)`: Thumb bending force
-- `FORCE_ACT(5)`: Thumb rotation force
+#### 可用的寄存器函数
 
-#### Actuator Data (Read-only)
-- `CURRENT(0-5)`: Actuator current values (mA)
-- `ERROR(0-5)`: Actuator error codes
-- `TEMP(0-5)`: Actuator temperature values (°C)
+该库为所有 71 个寄存器提供了函数，包括：
+- `HAND_ID()` - 设备 ID
+- `TEMP_0()`, `TEMP_1()`, ... - 执行器温度
+- `FORCE_ACT_0()`, `FORCE_ACT_1()`, ... - 手指力值
+- `CURRENT_0()`, `CURRENT_1()`, ... - 执行器电流值
+- `POS_SET_0()`, `POS_SET_1()`, ... - 位置设置
+- `ANGLE_SET_0()`, `ANGLE_SET_1()`, ... - 角度设置
+- 以及更多...
 
-#### Tactile Data (Read-only)
-- Various tactile data registers for all fingers and palm
-- 3x3, 12x8, and 10x8 matrix configurations
-- 16-bit integer values (0-4096)
+### 字符串形式访问
 
-## Register Configuration
+字符串形式访问仍受支持，以保持向后兼容：
 
-Register definitions are located in the `Register/config/configFTP` directory:
-- `ftp_registers.py`: Main register configuration
-- `ftp_registers_keys.py`: Register name constants
-
-The library automatically loads these configurations during initialization.
-
-## Logging
-
-The library includes a built-in logging system that records:
-- All `get` and `set` operations with timestamps
-- Connection status and errors
-- Register addresses and values
-
-Logs are saved to `rh56dftp.log` and also printed to the console with the format:
-```
-YYYY-MM-DD HH:MM:SS - RH56DFTP - LEVEL - MESSAGE
+```python
+# 字符串形式访问（仍受支持）
+hand_id = client.get("HAND_ID")
+force_0 = client.get("FORCE_ACT(0)")
+temp_1 = client.get("TEMP(1)")
 ```
 
-## Project Structure
+### 寄存器分类
+
+该库提供了按功能组织的预定义寄存器名称：
+
+#### 设备配置
+- `HAND_ID`: 设备 ID (1-254)
+- `REDU_RATIO`: 波特率设置
+- `CLEAR_ERROR`: 清除错误命令
+- `SAVE`: 将配置保存到闪存
+- `RESET_PARA`: 恢复出厂设置
+
+#### 手指力数据（只读）
+- `FORCE_ACT(0)`: 小指力
+- `FORCE_ACT(1)`: 无名指力  
+- `FORCE_ACT(2)`: 中指力
+- `FORCE_ACT(3)`: 食指力
+- `FORCE_ACT(4)`: 拇指弯曲力
+- `FORCE_ACT(5)`: 拇指旋转力
+
+#### 执行器数据（只读）
+- `CURRENT(0-5)`: 执行器电流值 (mA)
+- `ERROR(0-5)`: 执行器错误代码
+- `TEMP(0-5)`: 执行器温度值 (°C)
+
+#### 触觉数据（只读）
+- 用于所有手指和手掌的各种触觉数据寄存器
+- 3x3、12x8 和 10x8 矩阵配置
+- 16 位整数值 (0-4096)
+
+## 寄存器配置
+
+寄存器定义位于 `Register/config/configFTP` 目录中：
+- `ftp_registers.py`: 主寄存器配置
+- `ftp_registers_keys.py`: 寄存器名称常量
+
+该库在初始化时会自动加载这些配置。
+
+## 日志记录
+
+该库包含一个内置的日志系统，用于记录：
+- 所有带时间戳的 `get` 和 `set` 操作
+- 连接状态和错误
+- 寄存器地址和值
+
+日志保存到 `rh56dftp.log` 文件中，并以以下格式打印到控制台：
+```
+YYYY-MM-DD HH:MM:SS - RH56DFTP - 级别 - 消息
+```
+
+## 项目结构
 
 ```
 RH56DFTP_teach/
-├── RH56DFTP/              # Main library code
-│   ├── RH56DFTP_base.py   # Abstract base class
-│   ├── RH56DFTP_base.pyi  # Type hints for base class
-│   ├── RH56DFTP_TCP.py    # TCP implementation
-│   ├── RH56DFTP_TCP.pyi   # Type hints for TCP implementation
-│   └── __init__.py        # Package initialization
-├── Register/              # Register configuration
-│   ├── config/            # Configuration files
-│   │   └── configFTP/     # FTP register configs
-│   ├── RegisterKey/       # Register name constants
-│   └── RegisterSet/       # Register classes
-├── connect.py             # Example connection script
-├── LICENSE                # MIT License file
-├── README.md              # This file
-├── pyproject.toml         # Modern package configuration
-├── setup.py               # Package setup (legacy)
-└── requirements.txt       # Dependencies
+├── RH56DFTP/              # 主库代码
+│   ├── RH56DFTP_base.py   # 抽象基类
+│   ├── RH56DFTP_base.pyi  # 基类的类型提示
+│   ├── RH56DFTP_TCP.py    # TCP 实现
+│   ├── RH56DFTP_TCP.pyi   # TCP 实现的类型提示
+│   └── __init__.py        # 包初始化
+├── Register/              # 寄存器配置
+│   ├── config/            # 配置文件
+│   │   └── configFTP/     # FTP 寄存器配置
+│   ├── RegisterKey/       # 寄存器名称常量
+│   └── RegisterSet/       # 寄存器类
+├── connect.py             # 示例连接脚本
+├── LICENSE                # MIT 许可证文件
+├── README.md              # 本文档
+├── pyproject.toml         # 现代包配置
+├── setup.py               # 包设置（旧版）
+└── requirements.txt       # 依赖项
 ```
 
-## Development
+## 开发
 
-### Building the Package
+### 构建包
 
-To build the package for distribution (recommended method):
+要构建用于分发的包（推荐方法）：
 
 ```bash
 python -m build
 ```
 
-This will generate:
-- `dist/plusml-rh56dftp-0.1.0.tar.gz` (source distribution)
-- `dist/plusml-rh56dftp-0.1.0-py3-none-any.whl` (wheel distribution)
+这将生成：
+- `dist/plusml-rh56dftp-0.1.0.tar.gz`（源分发）
+- `dist/plusml-rh56dftp-0.1.0-py3-none-any.whl`（wheel 分发）
 
-## License
+## 许可证
 
-MIT License
+MIT 许可证
 
-## Repository
+## 仓库
 
 [https://github.com/plus-m-r/RH56DFTP_teach](https://github.com/plus-m-r/RH56DFTP_teach)

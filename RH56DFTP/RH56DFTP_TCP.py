@@ -44,9 +44,12 @@ class RH56DFTPClient(RH56DFTPBase):
         """
         logger.info("正在初始化连接到设备: %s:%s", host, port)
         self.client = ModbusTcpClient(host=host, port=port, timeout=3)
-        if not self.client.connect():
-            logger.error("连接失败：无法连接到 %s:%s", host, port)
-            raise ConnectionError(f"连接失败：无法连接到 {host}:{port}")
+        self.is_connected = self.client.connect()
+        
+        if not self.is_connected:
+            logger.warning("连接失败：无法连接到 %s:%s，将以离线模式初始化", host, port)
+        else:
+            logger.info("成功连接到 %s:%s", host, port)
 
         # 创建寄存器对象字典
         logger.debug("正在创建寄存器对象字典，使用内置配置")
@@ -54,8 +57,48 @@ class RH56DFTPClient(RH56DFTPBase):
             config_folder_path=None,
             strategy_name='ftp'
         )
-        logger.info("成功连接到 %s:%s", host, port)
-        logger.info("已加载 %d 个寄存器", len(self.registers))
+        
+        # 动态注入寄存器方法，用于IDE函数提示
+        logger.debug("正在动态注入寄存器方法")
+        for register_name in self.registers:
+            register = self.registers[register_name]
+            # 创建一个闭包，捕获当前寄存器名称
+            def create_getter(r_name, r_data_type, r_address, r_access_type, r_description):
+                # 定义动态方法
+                def getter():
+                    """动态生成的寄存器读取方法"""
+                    if not self.is_connected:
+                        raise ConnectionError("设备未连接")
+                    return self.get(r_name)
+                # 设置方法名称
+                getter.__name__ = f"get_{r_name}"
+                # 设置文档字符串
+                getter.__doc__ = f"获取寄存器 {r_name} 的值\n\n" + \
+                                f"地址: {r_address}\n" + \
+                                f"数据类型: {r_data_type}\n" + \
+                                f"访问类型: {r_access_type}\n" + \
+                                f"描述: {r_description}"
+                # 添加返回类型注解
+                # 根据数据类型设置返回类型
+                if r_data_type == "uint8":
+                    getter.__annotations__["return"] = int
+                elif r_data_type == "short":
+                    getter.__annotations__["return"] = int
+                else:
+                    getter.__annotations__["return"] = Any
+                return getter
+            
+            # 生成并添加方法到实例
+            getter_method = create_getter(
+                register_name, 
+                register.data_type, 
+                register.address, 
+                register.access_type, 
+                register.description
+            )
+            setattr(self, f"get_{register_name}", getter_method)
+        
+        logger.info("已加载 %d 个寄存器，动态注入了 %d 个方法", len(self.registers), len(self.registers))
 
     def _process_raw_value(self, register, raw_value):
         """处理原始寄存器值，根据数据类型转换"""
@@ -128,12 +171,12 @@ class RH56DFTPClient(RH56DFTPBase):
                        register_name, value, start_address, end_address)
         return value
 
-    def get(self, register_name: RegisterName) -> Any:
+    def get(self, register_name: RegisterName | callable) -> Any:
         """
         获取指定寄存器的值
 
         Args:
-            register_name: 寄存器名称
+            register_name: 寄存器名称或寄存器函数对象
 
         Returns:
             寄存器的当前值
@@ -141,6 +184,21 @@ class RH56DFTPClient(RH56DFTPBase):
         Raises:
             ValueError: 当寄存器不存在或读取失败时抛出
         """
+        # 处理函数对象，提取函数名称作为寄存器名称
+        original_register_name = register_name
+        if callable(register_name):
+            # 从REGISTE_MAP中查找对应的寄存器名称
+            found_name = None
+            for name, func in self.registers.items():
+                func_name = name.replace("(", "_").replace(")", "")
+                if register_name.__name__ == func_name:
+                    found_name = name
+                    break
+            if found_name:
+                register_name = found_name
+            else:
+                register_name = register_name.__name__
+        
         logger.info("开始读取寄存器: %s", register_name)
 
         # 检查连接状态
@@ -169,17 +227,31 @@ class RH56DFTPClient(RH56DFTPBase):
             logger.error("读取寄存器 %s 时出错: %s", register_name, str(e))
             raise ValueError(f"读取寄存器 {register_name} 时出错: {str(e)}") from e
 
-    def set(self, register_name: RegisterName, value: Any) -> bool:
+    def set(self, register_name: RegisterName | callable, value: Any) -> bool:
         """
         设置指定寄存器的值
 
         Args:
-            register_name: 寄存器名称
+            register_name: 寄存器名称或寄存器函数对象
             value: 要设置的值
 
         Returns:
             设置是否成功
         """
+        # 处理函数对象，提取函数名称作为寄存器名称
+        if callable(register_name):
+            # 从REGISTE_MAP中查找对应的寄存器名称
+            found_name = None
+            for name, func in self.registers.items():
+                func_name = name.replace("(", "_").replace(")", "")
+                if register_name.__name__ == func_name:
+                    found_name = name
+                    break
+            if found_name:
+                register_name = found_name
+            else:
+                register_name = register_name.__name__
+        
         logger.info("开始设置寄存器: %s, 值: %s", register_name, value)
 
         # 1. 检查连接状态
